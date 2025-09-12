@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION = "us-east-1"
+        EC2_IP = ''
     }
 
     stages {
@@ -20,50 +21,52 @@ pipeline {
             }
         }
         stage('Wait for EC2 to be ready') {
-            steps {
-                sh '''
-                  # Get EC2 Public IP
-                  EC2_IP=$(aws ssm get-parameter \
+    steps {
+        withCredentials([aws(credentialsId: 'aws-creds', 
+                             accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+            script {
+                env.EC2_IP = sh(script: """
+                  aws ssm get-parameter \
                     --name "/jenkins/ci_ephemeral_ip" \
                     --region ${AWS_REGION} \
                     --query "Parameter.Value" \
-                    --output text)
+                    --output text
+                """, returnStdout: true).trim()
 
-                  echo "Waiting for EC2 at $EC2_IP to be reachable..."
+                echo "Waiting for EC2 at ${env.EC2_IP} to be reachable..."
 
-                  # Wait until SSH is available (timeout 5 mins)
+                // Wait until SSH is available
+                sh """
                   timeout=300
-                  while ! nc -z -v -w5 $EC2_IP 22; do
+                  while ! nc -z -v -w5 ${env.EC2_IP} 22; do
                       echo "Waiting for SSH..."
                       sleep 5
-                      timeout=$((timeout-5))
-                      if [ $timeout -le 0 ]; then
+                      timeout=\$((timeout-5))
+                      if [ \$timeout -le 0 ]; then
                           echo "Timeout waiting for EC2 SSH"
                           exit 1
                       fi
                   done
                   echo "EC2 is ready for Ansible"
-                '''
+                """
             }
         }
+    }
+}
 
         stage('Configure with Ansible') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'aws-ec2-key', 
                                                   keyFileVariable: 'JENKINS_PEM')]) {
                     sh '''
-                      # Get IP from SSM Parameter Store
-                      EC2_IP=$(aws ssm get-parameter \
-                        --name "/jenkins/ci_ephemeral_ip" \
-                        --region ${AWS_REGION} \
-                        --query "Parameter.Value" \
-                        --output text)
+                      
 
-                      echo "Connecting to EC2 at $EC2_IP"
+                      echo "Connecting to EC2 at ${env.EC2_IP}"
 
                       # Run ansible playbook (inline inventory)
                       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
-                        -i "$EC2_IP," \
+                        -i "${env.EC2_IP}," \
                         -u ec2-user \
                         --private-key $JENKINS_PEM \
                         ansible/install_docker.yml
