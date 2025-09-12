@@ -49,7 +49,7 @@ pipeline {
 
                         sh """
                           echo "Waiting for SSH on ${env.EC2_IP}..."
-                          timeout=60
+                          timeout=120
                           while ! timeout 5 bash -c "</dev/tcp/${env.EC2_IP}/22"; do
                               echo "Waiting for SSH..."
                               sleep 5
@@ -67,20 +67,41 @@ pipeline {
         }
 
         stage('Configure with Ansible') {
-            steps {
-                withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
-                    sh """
-                      chmod 400 "\$JENKINS_PEM"
-                      echo "Connecting to EC2 at ${env.EC2_IP}"
+        steps {
+            withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
+                 script {
+                     int retries = 5
+                     int wait_seconds = 10
+                     boolean success = false
 
-                      ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
-                        -i "${env.EC2_IP}," \
-                        -u ec2-user \
-                        --private-key "\$JENKINS_PEM" \
-                        ansible/playbook.yml
-                    """
+                for (int i = 1; i <= retries; i++) {
+                    echo "Attempt ${i} to run Ansible playbook..."
+                    try {
+                        sh """
+                          chmod 400 "\$JENKINS_PEM"
+                          echo "Connecting to EC2 at ${env.EC2_IP}"
+
+                          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
+                            -i "${env.EC2_IP}," \
+                            -u ec2-user \
+                            --private-key "\$JENKINS_PEM" \
+                            ansible/playbook.yaml
+                        """
+                        success = true
+                        echo "Ansible playbook completed successfully!"
+                        break
+                    } catch (Exception e) {
+                        echo "Ansible playbook failed on attempt ${i}. Retrying in ${wait_seconds} seconds..."
+                        sleep(wait_seconds)
+                    }
+                }
+
+                if (!success) {
+                    error "Ansible playbook failed after ${retries} attempts."
                 }
             }
         }
+    }
+}
     }
 }
