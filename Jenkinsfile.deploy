@@ -109,6 +109,7 @@ pipeline {
                           echo "Connecting to EC2 at ${env.EC2_IP}"
 
                           ssh -o StrictHostKeyChecking=no -i "\$JENKINS_PEM" ec2-user@${env.EC2_IP} '
+                             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                              sudo docker rm -f web || true
                              sudo docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
                           '
