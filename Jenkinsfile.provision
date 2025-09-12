@@ -7,10 +7,11 @@ pipeline {
 
     stages {
         stage('Checkout') {
-    steps {
-        checkout scm
-    }
-}
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Terraform Init & Apply') {
             steps {
                 withCredentials([aws(
@@ -67,18 +68,15 @@ pipeline {
 
         stage('Configure with Ansible') {
             steps {
-                withCredentials([sshUserPrivateKey(
-                    credentialsId: 'aws-ec2-key', 
-                    keyFileVariable: 'JENKINS_PEM'
-                )]) {
+                withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
                     sh """
-                      chmod 400 $JENKINS_PEM
+                      chmod 400 \$JENKINS_PEM
                       echo "Connecting to EC2 at ${env.EC2_IP}"
 
                       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
                         -i "${env.EC2_IP}," \
                         -u ec2-user \
-                        --private-key $JENKINS_PEM \
+                        --private-key \$JENKINS_PEM \
                         ansible/install_docker.yml
                     """
                 }
