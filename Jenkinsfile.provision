@@ -6,6 +6,11 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+    steps {
+        checkout scm
+    }
+}
         stage('Terraform Init & Apply') {
             steps {
                 withCredentials([aws(
@@ -30,7 +35,6 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     script {
-                        // EC2 IP from SSM Parameter Store
                         def ec2_ip = sh(script: """
                             aws ssm get-parameter \
                               --name "/jenkins/ci_ephemeral_ip" \
@@ -42,10 +46,9 @@ pipeline {
                         env.EC2_IP = ec2_ip
                         echo "EC2 IP: ${env.EC2_IP}"
 
-                        // waiting for SSH to be available
                         sh """
                           echo "Waiting for SSH on ${env.EC2_IP}..."
-                          timeout=300
+                          timeout=60
                           while ! timeout 5 bash -c "</dev/tcp/${env.EC2_IP}/22"; do
                               echo "Waiting for SSH..."
                               sleep 5
@@ -69,6 +72,7 @@ pipeline {
                     keyFileVariable: 'JENKINS_PEM'
                 )]) {
                     sh """
+                      chmod 400 $JENKINS_PEM
                       echo "Connecting to EC2 at ${env.EC2_IP}"
 
                       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
