@@ -69,7 +69,7 @@ pipeline {
         stage('Configure with Ansible') {
             steps {
                 withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
-                    sh """
+                    sh '''
                       chmod 400 \$JENKINS_PEM
                       echo "Connecting to EC2 at ${env.EC2_IP}"
 
@@ -78,7 +78,7 @@ pipeline {
                         -u ec2-user \
                         --private-key \$JENKINS_PEM \
                         ansible/install_docker.yml
-                    """
+                    '''
                 }
             }
         }
