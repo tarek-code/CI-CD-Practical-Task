@@ -19,6 +19,33 @@ pipeline {
                 }
             }
         }
+        stage('Wait for EC2 to be ready') {
+            steps {
+                sh '''
+                  # Get EC2 Public IP
+                  EC2_IP=$(aws ssm get-parameter \
+                    --name "/jenkins/ci_ephemeral_ip" \
+                    --region ${AWS_REGION} \
+                    --query "Parameter.Value" \
+                    --output text)
+
+                  echo "Waiting for EC2 at $EC2_IP to be reachable..."
+
+                  # Wait until SSH is available (timeout 5 mins)
+                  timeout=300
+                  while ! nc -z -v -w5 $EC2_IP 22; do
+                      echo "Waiting for SSH..."
+                      sleep 5
+                      timeout=$((timeout-5))
+                      if [ $timeout -le 0 ]; then
+                          echo "Timeout waiting for EC2 SSH"
+                          exit 1
+                      fi
+                  done
+                  echo "EC2 is ready for Ansible"
+                '''
+            }
+        }
 
         stage('Configure with Ansible') {
             steps {
