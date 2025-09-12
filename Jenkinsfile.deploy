@@ -1,0 +1,138 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = "us-east-1"
+        IMAGE_NAME = "tarekadel/konecta-task-7/nginx-ci"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Wait for EC2 to be ready') {
+            steps {
+                withCredentials([aws(
+                    credentialsId: 'aws-creds', 
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    script {
+                        def ec2_ip = sh(script: """
+                            aws ssm get-parameter \
+                              --name "/jenkins/ci_ephemeral_ip" \
+                              --region ${AWS_REGION} \
+                              --query "Parameter.Value" \
+                              --output text
+                        """, returnStdout: true).trim()
+
+                        env.EC2_IP = ec2_ip
+                        echo "EC2 IP: ${env.EC2_IP}"
+
+                        sh """
+                          echo "Waiting for SSH on ${env.EC2_IP}..."
+                          timeout=120
+                          while ! timeout 5 bash -c "</dev/tcp/${env.EC2_IP}/22"; do
+                              echo "Waiting for SSH..."
+                              sleep 5
+                              timeout=\$((timeout-5))
+                              if [ \$timeout -le 0 ]; then
+                                  echo "Timeout waiting for EC2 SSH"
+                                  exit 1
+                              fi
+                          done
+                          echo "EC2 is ready for Ansible"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def timestamp = sh(script: "date +%Y%m%d-%H%M%S", returnStdout: true).trim()
+                    env.IMAGE_TAG = "${BUILD_NUMBER}-${timestamp}"
+                    
+                    sh """
+                # clean build
+                rm -rf docker_build
+                mkdir -p docker_build
+
+                #  index.html   build
+                echo "<!DOCTYPE html>" > docker_build/index.html
+                echo "<html><head><title>CI/CD</title></head><body>" >> docker_build/index.html
+                echo "<h1>Hello from CI/CD Pipeline!</h1>" >> docker_build/index.html
+                echo "<p>BUILD_NUMBER: ${BUILD_NUMBER}</p>" >> docker_build/index.html
+                echo "<p>Timestamp: ${timestamp}</p>" >> docker_build/index.html
+                echo "</body></html>" >> docker_build/index.html
+
+                #  Dockerfile
+                echo "FROM nginx:alpine" > docker_build/Dockerfile
+                echo "COPY index.html /usr/share/nginx/html/index.html" >> docker_build/Dockerfile
+
+                #  build 
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} docker_build
+                rm -rf docker_build
+            """
+                }
+            }
+        }
+
+        stage('Docker Login & Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+         stage('Deploy to EC2') {
+            steps {
+                 withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
+                 script {
+                int retries = 5
+                int wait_seconds = 10
+                boolean success = false
+
+                for (int i = 1; i <= retries; i++) {
+                    echo "Attempt ${i} to  Deploy to EC2..."
+                    try {
+                        sh """
+                          chmod 400 "\$JENKINS_PEM"
+                          echo "Connecting to EC2 at ${env.EC2_IP}"
+
+                            ssh -o StrictHostKeyChecking=no -i \$JENKINS_PEM ec2-user@${env.EC2_IP} '
+                                docker rm -f web || true
+                                docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
+                            '
+                            curl -s http://${env.EC2_IP} | head -5
+                        """
+                        success = true
+                        echo "Deploy to EC2 completed successfully!"
+                        break
+                    } catch (Exception e) {
+                        echo "Deploy to EC2 failed on attempt ${i}. Retrying in ${wait_seconds} seconds..."
+                        sleep(wait_seconds)
+                    }
+                }
+
+                if (!success) {
+                    error "Deploy to EC2 failed after ${retries} attempts."
+                }
+            }
+        }
+    }
+}
+
+        
+    }
+
+
+}
