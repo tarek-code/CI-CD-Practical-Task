@@ -1,0 +1,48 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = "us-east-1"
+    }
+
+    stages {
+        stage('Terraform Init & Apply') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws-creds', 
+                                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                      cd terraform
+                      terraform init
+                      terraform apply -auto-approve
+                    '''
+                }
+            }
+        }
+
+        stage('Configure with Ansible') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'aws-ec2-key', 
+                                                  keyFileVariable: 'JENKINS_PEM')]) {
+                    sh '''
+                      # Get IP from SSM Parameter Store
+                      EC2_IP=$(aws ssm get-parameter \
+                        --name "/jenkins/ci_ephemeral_ip" \
+                        --region ${AWS_REGION} \
+                        --query "Parameter.Value" \
+                        --output text)
+
+                      echo "Connecting to EC2 at $EC2_IP"
+
+                      # Run ansible playbook (inline inventory)
+                      ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
+                        -i "$EC2_IP," \
+                        -u ec2-user \
+                        --private-key $JENKINS_PEM \
+                        ansible/install_docker.yml
+                    '''
+                }
+            }
+        }
+    }
+}
