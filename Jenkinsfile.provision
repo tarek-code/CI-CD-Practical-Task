@@ -19,11 +19,11 @@ pipeline {
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
-                    sh '''
+                    sh """
                       cd terraform
                       terraform init
                       terraform apply -auto-approve
-                    '''
+                    """
                 }
             }
         }
@@ -69,16 +69,16 @@ pipeline {
         stage('Configure with Ansible') {
             steps {
                 withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
-                    sh '''
-                      chmod 400 \$JENKINS_PEM
+                    sh """
+                      chmod 400 "\$JENKINS_PEM"
                       echo "Connecting to EC2 at ${env.EC2_IP}"
 
                       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
                         -i "${env.EC2_IP}," \
                         -u ec2-user \
-                        --private-key \$JENKINS_PEM \
+                        --private-key "\$JENKINS_PEM" \
                         ansible/install_docker.yml
-                    '''
+                    """
                 }
             }
         }
