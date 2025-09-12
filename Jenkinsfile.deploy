@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION = "us-east-1"
-        IMAGE_NAME = "tarekadel/konecta-task-7/nginx-ci"
+        IMAGE_NAME = "tarekadel/nginx-ci"
     }
 
     stages {
