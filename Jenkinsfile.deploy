@@ -95,7 +95,7 @@ pipeline {
 
          stage('Deploy to EC2') {
     steps {
-        withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')],[usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+        withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM'),usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
             script {
                 int retries = 5
                 int wait_seconds = 10
