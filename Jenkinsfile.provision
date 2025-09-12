@@ -3,15 +3,16 @@ pipeline {
 
     environment {
         AWS_REGION = "us-east-1"
-        EC2_IP = ''
     }
 
     stages {
         stage('Terraform Init & Apply') {
             steps {
-                withCredentials([aws(credentialsId: 'aws-creds', 
-                                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
-                                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([aws(
+                    credentialsId: 'aws-creds', 
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
                     sh '''
                       cd terraform
                       terraform init
@@ -20,57 +21,62 @@ pipeline {
                 }
             }
         }
+
         stage('Wait for EC2 to be ready') {
-    steps {
-        withCredentials([aws(credentialsId: 'aws-creds', 
-                             accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
-                             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-            script {
-                env.EC2_IP = sh(script: """
-                  aws ssm get-parameter \
-                    --name "/jenkins/ci_ephemeral_ip" \
-                    --region ${AWS_REGION} \
-                    --query "Parameter.Value" \
-                    --output text
-                """, returnStdout: true).trim()
+            steps {
+                withCredentials([aws(
+                    credentialsId: 'aws-creds', 
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    script {
+                        // EC2 IP from SSM Parameter Store
+                        def ec2_ip = sh(script: """
+                            aws ssm get-parameter \
+                              --name "/jenkins/ci_ephemeral_ip" \
+                              --region ${AWS_REGION} \
+                              --query "Parameter.Value" \
+                              --output text
+                        """, returnStdout: true).trim()
 
-                echo "Waiting for EC2 at ${env.EC2_IP} to be reachable..."
+                        env.EC2_IP = ec2_ip
+                        echo "EC2 IP: ${env.EC2_IP}"
 
-                // Wait until SSH is available
-                sh """
-                  timeout=300
-                  while ! nc -z -v -w5 ${env.EC2_IP} 22; do
-                      echo "Waiting for SSH..."
-                      sleep 5
-                      timeout=\$((timeout-5))
-                      if [ \$timeout -le 0 ]; then
-                          echo "Timeout waiting for EC2 SSH"
-                          exit 1
-                      fi
-                  done
-                  echo "EC2 is ready for Ansible"
-                """
+                        // waiting for SSH to be available
+                        sh """
+                          echo "Waiting for SSH on ${env.EC2_IP}..."
+                          timeout=300
+                          while ! timeout 5 bash -c "</dev/tcp/${env.EC2_IP}/22"; do
+                              echo "Waiting for SSH..."
+                              sleep 5
+                              timeout=\$((timeout-5))
+                              if [ \$timeout -le 0 ]; then
+                                  echo "Timeout waiting for EC2 SSH"
+                                  exit 1
+                              fi
+                          done
+                          echo "EC2 is ready for Ansible"
+                        """
+                    }
+                }
             }
         }
-    }
-}
 
         stage('Configure with Ansible') {
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'aws-ec2-key', 
-                                                  keyFileVariable: 'JENKINS_PEM')]) {
-                    sh '''
-                      
-
+                withCredentials([sshUserPrivateKey(
+                    credentialsId: 'aws-ec2-key', 
+                    keyFileVariable: 'JENKINS_PEM'
+                )]) {
+                    sh """
                       echo "Connecting to EC2 at ${env.EC2_IP}"
 
-                      # Run ansible playbook (inline inventory)
                       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
                         -i "${env.EC2_IP}," \
                         -u ec2-user \
                         --private-key $JENKINS_PEM \
                         ansible/install_docker.yml
-                    '''
+                    """
                 }
             }
         }
