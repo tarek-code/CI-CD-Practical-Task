@@ -77,7 +77,7 @@ pipeline {
                         -i "${env.EC2_IP}," \
                         -u ec2-user \
                         --private-key "\$JENKINS_PEM" \
-                        ansible/install_docker.yml
+                        ansible/playbook.yml
                     """
                 }
             }
