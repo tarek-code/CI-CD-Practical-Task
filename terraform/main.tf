@@ -44,7 +44,3 @@ resource "aws_ssm_parameter" "ci_ephemeral_ip" {
   type  = "String"
   value = aws_instance.ci_ephemeral.public_ip
 }
-
-output "public_ip" {
-  value = aws_instance.ci_ephemeral.public_ip
-}
