@@ -31,7 +31,6 @@ resource "aws_instance" "ci_ephemeral" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
   associate_public_ip_address = true
-  region                      = var.aws_region
   key_name                    = "jenkins"
   tags = {
     Name     = "ci-ephemeral"
@@ -42,8 +41,7 @@ resource "aws_instance" "ci_ephemeral" {
 
 # Store Public IP in SSM Parameter Store
 resource "aws_ssm_parameter" "ci_ephemeral_ip" {
-  name   = "/jenkins/ci_ephemeral_ip"
-  type   = "String"
-  value  = aws_instance.ci_ephemeral.public_ip
-  region = var.aws_region
+  name  = "/jenkins/ci_ephemeral_ip"
+  type  = "String"
+  value = aws_instance.ci_ephemeral.public_ip
 }
