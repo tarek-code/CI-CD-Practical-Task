@@ -30,6 +30,7 @@ resource "aws_instance" "ci_ephemeral" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
   associate_public_ip_address = true
+  region                      = var.aws_region
   key_name                    = "jenkins"
   tags = {
     Name     = "ci-ephemeral"
