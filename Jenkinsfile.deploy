@@ -109,8 +109,8 @@ pipeline {
                           echo "Connecting to EC2 at ${env.EC2_IP}"
 
                           ssh -o StrictHostKeyChecking=no -i "\$JENKINS_PEM" ec2-user@${env.EC2_IP} '
-                              docker rm -f web || true
-                              docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
+                             sudo docker rm -f web || true
+                             sudo docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
                           '
                           echo "Checking if web is up..."
                           curl -s http://${env.EC2_IP} | head -5
