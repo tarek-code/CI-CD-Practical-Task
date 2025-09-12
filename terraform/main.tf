@@ -13,7 +13,6 @@ provider "aws" {
 }
 
 data "aws_ami" "amazon_linux" {
-  region      = var.aws_region
   most_recent = true
   owners      = ["amazon"]
 
