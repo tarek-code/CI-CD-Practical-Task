@@ -94,31 +94,32 @@ pipeline {
         }
 
          stage('Deploy to EC2') {
-            steps {
-                 withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
-                 script {
+    steps {
+        withCredentials([file(credentialsId: 'JENKINS_PEM', variable: 'JENKINS_PEM')]) {
+            script {
                 int retries = 5
                 int wait_seconds = 10
                 boolean success = false
 
                 for (int i = 1; i <= retries; i++) {
-                    echo "Attempt ${i} to  Deploy to EC2..."
+                    echo "Attempt ${i} to Deploy Docker to EC2..."
                     try {
                         sh """
                           chmod 400 "\$JENKINS_PEM"
                           echo "Connecting to EC2 at ${env.EC2_IP}"
 
-                            ssh -o StrictHostKeyChecking=no -i \$JENKINS_PEM ec2-user@${env.EC2_IP} '
-                                docker rm -f web || true
-                                docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
-                            '
-                            curl -s http://${env.EC2_IP} | head -5
+                          ssh -o StrictHostKeyChecking=no -i "\$JENKINS_PEM" ec2-user@${env.EC2_IP} '
+                              docker rm -f web || true
+                              docker run -d --name web -p 80:80 ${IMAGE_NAME}:${IMAGE_TAG}
+                          '
+                          echo "Checking if web is up..."
+                          curl -s http://${env.EC2_IP} | head -5
                         """
                         success = true
                         echo "Deploy to EC2 completed successfully!"
                         break
                     } catch (Exception e) {
-                        echo "Deploy to EC2 failed on attempt ${i}. Retrying in ${wait_seconds} seconds..."
+                        echo "Deploy failed on attempt ${i}. Retrying in ${wait_seconds} seconds..."
                         sleep(wait_seconds)
                     }
                 }
