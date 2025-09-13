@@ -5,12 +5,6 @@ pipeline {
         AWS_REGION = "us-east-1"
     }
 
-    properties([
-        pipelineTriggers([
-            cron('TZ=Africa/Cairo\n10 3 * * *') // Daily at midnight Cairo time
-        ])
-    ])
-
     stages {
         stage('Cleanup Ephemeral EC2s') {
             steps {
