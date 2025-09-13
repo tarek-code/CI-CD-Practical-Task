@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = "us-east-1"
+    }
+
+    properties([
+        pipelineTriggers([
+            cron('TZ=Africa/Cairo\n10 3 * * *') // Daily at midnight Cairo time
+        ])
+    ])
+
+    stages {
+        stage('Cleanup Ephemeral EC2s') {
+            steps {
+                withCredentials([aws(
+                    credentialsId: 'JenkinsCleanup',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    script {
+                        sh """
+                          echo "🔍 Searching for ephemeral instances..."
+                          INSTANCE_IDS=\$(aws ec2 describe-instances \
+                            --region ${AWS_REGION} \
+                            --filters "Name=tag:lifespan,Values=ephemeral" "Name=tag:Name,Values=ci-ephemeral" "Name=tag:owner,Values=jenkins" \
+                            --filters "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+                            --query "Reservations[*].Instances[*].InstanceId" \
+                            --output text)
+
+                          if [ -z "\$INSTANCE_IDS" ]; then
+                            echo "✅ No ephemeral instances found."
+                          else
+                            echo "🛑 Terminating instances: \$INSTANCE_IDS"
+                            aws ec2 terminate-instances --region ${AWS_REGION} --instance-ids \$INSTANCE_IDS
+                          fi
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
