@@ -1,35 +1,41 @@
 pipeline {
     agent any
-
     environment {
-        AWS_REGION = "us-east-1"
+        AWS_REGION = 'us-east-1'  
     }
-
+    
     stages {
         stage('Cleanup Ephemeral EC2s') {
             steps {
                 withCredentials([aws(
-                    credentialsId: 'JenkinsCleanup',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    credentialsId: 'JenkinsCleanup', 
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     script {
-                        sh """
-                          echo "🔍 Searching for ephemeral instances..."
-                          INSTANCE_IDS=\$(aws ec2 describe-instances \
-                            --region ${AWS_REGION} \
-                            --filters "Name=tag:lifespan,Values=ephemeral" "Name=tag:Name,Values=ci-ephemeral" "Name=tag:owner,Values=jenkins" \
-                            --filters "Name=instance-state-name,Values=pending,running,stopping,stopped" \
-                            --query "Reservations[*].Instances[*].InstanceId" \
-                            --output text)
+                        echo "Fetching ephemeral EC2 instances..."
+                        
+                        //   Instance IDs   tag ephemeral
+                        def instances = sh(
+                            script: """aws ec2 describe-instances \
+                                --region ${AWS_REGION} \
+                                --filters "Name=tag:lifespan,Values=ephemeral" \
+                                          "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+                                --query "Reservations[*].Instances[*].InstanceId" \
+                                --output text""",
+                            returnStdout: true
+                        ).trim()
 
-                          if [ -z "\$INSTANCE_IDS" ]; then
-                            echo "✅ No ephemeral instances found."
-                          else
-                            echo "🛑 Terminating instances: \$INSTANCE_IDS"
-                            aws ec2 terminate-instances --region ${AWS_REGION} --instance-ids \$INSTANCE_IDS
-                          fi
-                        """
+                        if (instances) {
+                            echo "Discovered ephemeral instances: ${instances}"
+                            echo "Terminating instances..."
+                            sh """
+                                aws ec2 terminate-instances --region ${AWS_REGION} --instance-ids ${instances}
+                            """
+                            echo "Termination completed for instances: ${instances}"
+                        } else {
+                            echo "No ephemeral EC2 instances found."
+                        }
                     }
                 }
             }
