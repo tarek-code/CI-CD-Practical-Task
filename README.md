@@ -428,8 +428,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Having issues? We're here to help!
 
 - **Create an Issue**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Join Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Contact**: [your-email@example.com](mailto:your-email@example.com)
+- **Join Discussions**: [GitHub Discussions](tarekadel314@gmail.com)
+- **Contact**: [your-email@example.com](https://www.linkedin.com/in/tarek-adel-857279197/)
 
 ---
 
